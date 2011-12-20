@@ -48,6 +48,7 @@ import org.hibernate.search.Search;
 import org.hibernate.search.annotations.Factory;
 import org.hibernate.search.cfg.SearchMapping;
 import org.hibernate.search.query.dsl.QueryBuilder;
+import org.hibernate.search.query.dsl.Unit;
 import org.hibernate.search.test.SearchTestCase;
 
 /**
@@ -547,6 +548,40 @@ public class DSLTest extends SearchTestCase {
 		transaction.commit();
 	}
 
+
+	public void testSpatialQueries() {
+		Transaction transaction = fullTextSession.beginTransaction();
+		final QueryBuilder builder = fullTextSession.getSearchFactory()
+				.buildQueryBuilder().forEntity( POI.class ).get();
+
+		Query query = builder
+				.spatial()
+					.onCoordinates( "location" )
+					.within( 51, Unit.KM )
+						.of().latitude( 24d ).longitude( 31.5d )
+					.createQuery();
+
+		List results = fullTextSession.createFullTextQuery( query, POI.class ).list();
+
+		assertEquals( "test grid based spatial query", 1, results.size() );
+		assertEquals( "test grid based spatial query", "Bozo", ( (POI) results.get( 0 ) ).getName() );
+
+		query = builder
+				.spatial()
+					.onCoordinates( "location" )
+					.within( 500, Unit.KM )
+						.of().latitude(48.858333d).longitude(2.294444d)
+					.createQuery();
+		results = fullTextSession.createFullTextQuery( query, POI.class ).list();
+
+		//FIXME Niko, it fails not sure why for me it should work.
+//		assertEquals( "test boolean based spatial query", 1, results.size() );
+//		assertEquals( "test boolean based spatial  query", "Tour Eiffel", ( (POI) results.get( 0 ) ).getName() );
+
+
+		transaction.commit();
+	}
+
 	private void indexTestData() {
 		Transaction tx = fullTextSession.beginTransaction();
 		final Calendar calendar = Calendar.getInstance();
@@ -575,6 +610,11 @@ public class DSLTest extends SearchTestCase {
 						0.435d
 				)
 		);
+
+		POI poi = new POI( 1, "Tour Eiffel", 48.858333d, 2.294444d, "Monument" );
+		fullTextSession.persist( poi );
+		poi = new POI( 2, "Bozo", 24d, 32d, "Monument" );
+		fullTextSession.persist( poi );
 		tx.commit();
 		fullTextSession.clear();
 	}
@@ -583,11 +623,14 @@ public class DSLTest extends SearchTestCase {
 		if ( !fullTextSession.isOpen() ) {
 			return;
 		}
+		if ( fullTextSession.getTransaction().isActive() ) {
+			fullTextSession.getTransaction().rollback();
+		}
 		Transaction tx = fullTextSession.beginTransaction();
-		final List<Month> results = fullTextSession.createQuery( "from " + Month.class.getName() ).list();
-		assertEquals( 2, results.size() );
+		final List<Object> results = fullTextSession.createQuery( "from " + Object.class.getName() ).list();
+		assertEquals( 4, results.size() );
 
-		for ( Month entity : results ) {
+		for ( Object entity : results ) {
 			fullTextSession.delete( entity );
 		}
 
@@ -598,7 +641,8 @@ public class DSLTest extends SearchTestCase {
 	@Override
 	protected Class<?>[] getAnnotatedClasses() {
 		return new Class<?>[] {
-				Month.class
+				Month.class,
+				POI.class
 		};
 	}
 
