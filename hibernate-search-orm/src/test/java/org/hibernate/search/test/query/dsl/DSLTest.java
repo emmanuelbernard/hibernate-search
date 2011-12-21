@@ -49,6 +49,8 @@ import org.hibernate.search.annotations.Factory;
 import org.hibernate.search.cfg.SearchMapping;
 import org.hibernate.search.query.dsl.QueryBuilder;
 import org.hibernate.search.query.dsl.Unit;
+import org.hibernate.search.spatial.Coordinates;
+import org.hibernate.search.spatial.impl.Point;
 import org.hibernate.search.test.SearchTestCase;
 
 /**
@@ -554,11 +556,12 @@ public class DSLTest extends SearchTestCase {
 		final QueryBuilder builder = fullTextSession.getSearchFactory()
 				.buildQueryBuilder().forEntity( POI.class ).get();
 
+		Coordinates coordinates = Point.fromDegrees(24d, 31.5d);
 		Query query = builder
 				.spatial()
 					.onCoordinates( "location" )
 					.within( 51, Unit.KM )
-						.of().latitude( 24d ).longitude( 31.5d )
+						.ofCoordinates( coordinates )
 					.createQuery();
 
 		List results = fullTextSession.createFullTextQuery( query, POI.class ).list();
@@ -570,7 +573,7 @@ public class DSLTest extends SearchTestCase {
 				.spatial()
 					.onLatitudeField( "latitude" ).onLongitudeField( "longitude" )
 					.within( 51, Unit.KM )
-						.of().latitude( 24d ).longitude( 31.5d )
+						.ofLatitude( 24d ).andLongitude( 31.5d )
 					.createQuery();
 
 		results = fullTextSession.createFullTextQuery( query, POI.class ).list();
@@ -582,7 +585,7 @@ public class DSLTest extends SearchTestCase {
 				.spatial()
 					.onCoordinates( "location" )
 					.within( 500, Unit.KM )
-						.of().latitude(48.858333d).longitude(2.294444d)
+						.ofLatitude(48.858333d).andLongitude(2.294444d)
 					.createQuery();
 		results = fullTextSession.createFullTextQuery( query, POI.class ).list();
 
