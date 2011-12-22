@@ -35,6 +35,7 @@ import org.jboss.logging.Message;
 import org.jboss.logging.MessageLogger;
 
 import org.hibernate.search.SearchException;
+import org.hibernate.search.spatial.impl.GeometricConstants;
 
 import static org.jboss.logging.Logger.Level.ERROR;
 import static org.jboss.logging.Logger.Level.INFO;
@@ -521,4 +522,8 @@ public interface Log extends BasicLogger {
 
 	@Message(id = 121, value = "The field used for the spatial query is not using SpatialFieldBridge: %1$s.%2$s")
 	SearchException targetedFieldNotSpatial(String className, String fieldName);
+
+	@Message(id = 122, value = "Illegal latitude value for Point creation. Must be between "
+			+ GeometricConstants.LATITUDE_DEGREE_MIN + " and " + GeometricConstants.LATITUDE_DEGREE_MAX + ".")
+	IllegalArgumentException illegalLatitude();
 }
