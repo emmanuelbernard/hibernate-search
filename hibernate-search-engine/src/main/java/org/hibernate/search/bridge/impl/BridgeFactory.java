@@ -43,6 +43,7 @@ import org.hibernate.search.annotations.Field;
 import org.hibernate.search.annotations.NumericField;
 import org.hibernate.search.annotations.Parameter;
 import org.hibernate.search.annotations.Resolution;
+import org.hibernate.search.annotations.Spatial;
 import org.hibernate.search.bridge.AppliedOnTypeAwareBridge;
 import org.hibernate.search.bridge.FieldBridge;
 import org.hibernate.search.bridge.ParameterizedBridge;
@@ -77,6 +78,9 @@ import org.hibernate.search.bridge.builtin.StringBridge;
 import org.hibernate.search.bridge.builtin.UUIDBridge;
 import org.hibernate.search.bridge.builtin.UriBridge;
 import org.hibernate.search.bridge.builtin.UrlBridge;
+import org.hibernate.search.spatial.SpatialFieldBridge;
+import org.hibernate.search.util.logging.impl.Log;
+import org.hibernate.search.util.logging.impl.LoggerFactory;
 
 /**
  * This factory is responsible for creating and initializing build-in and custom <i>FieldBridges</i>.
@@ -85,6 +89,8 @@ import org.hibernate.search.bridge.builtin.UrlBridge;
  * @author John Griffin
  */
 public final class BridgeFactory {
+	private static final Log LOG = LoggerFactory.make();
+
 	private static Map<String, FieldBridge> builtInBridges = new HashMap<String, FieldBridge>();
 	private static Map<String, NumericFieldBridge> numericBridges = new HashMap<String, NumericFieldBridge>();
 
@@ -254,10 +260,7 @@ public final class BridgeFactory {
 						bridge = new String2FieldBridgeAdaptor( (org.hibernate.search.bridge.StringBridge) instance );
 					}
 					else {
-						throw new SearchException(
-								"@ClassBridge implementation implements none of the field bridge interfaces: "
-										+ impl
-						);
+						throw LOG.noFieldBridgeInterfaceImplementedByClassBridge( impl.getName() );
 					}
 					if ( cb.params().length > 0 && ParameterizedBridge.class.isAssignableFrom( impl ) ) {
 						Map<String, String> params = new HashMap<String, String>( cb.params().length );
@@ -268,14 +271,37 @@ public final class BridgeFactory {
 					}
 				}
 				catch ( Exception e ) {
-					final String msg = "Unable to instantiate ClassBridge of type " + impl.getName() + " defined on "
-							+ clazz.getName();
-					throw new SearchException( msg, e );
+					throw LOG.cannotInstantiateClassBridgeOfType( impl.getName(),clazz.getName(), e );
 				}
 			}
 		}
 		if ( bridge == null ) {
-			throw new SearchException( "Unable to guess FieldBridge for " + ClassBridge.class.getName() );
+			throw LOG.unableToGuessFieldBridge( ClassBridge.class.getName() );
+		}
+
+		return bridge;
+	}
+
+	/**
+	 * This instantiates the SpatialFieldBridge from a {@code Spatial} annotation.
+	 *
+	 * @param spatial the {@code Spatial} annotation
+	 * @param clazz the {@code XClass} on which the annotation is defined on
+	 *
+	 * @return Returns the {@code SpatialFieldBridge} instance
+	 */
+	public static SpatialFieldBridge buildSpatialBridge( Spatial spatial, XClass clazz ) {
+		SpatialFieldBridge bridge = null;
+		if( spatial != null )  {
+			try {
+				bridge= new SpatialFieldBridge( spatial.highGridLevel(), spatial.lowGridLevel() );
+			}
+			catch ( Exception e ) {
+				throw LOG.unableToInstantiateSpatial( clazz.getName(), e );
+			}
+		}
+		if( bridge == null) {
+			throw LOG.unableToInstantiateSpatial( clazz.getName(), null);
 		}
 
 		return bridge;
@@ -307,6 +333,11 @@ public final class BridgeFactory {
 		else if ( numericField != null ) {
 			bridge = guessNumericFieldBridge( member, reflectionManager );
 		}
+		else if ( member.isAnnotationPresent( org.hibernate.search.annotations.Spatial.class ) ) {
+			Spatial spatialAnn = member.getAnnotation( org.hibernate.search.annotations.Spatial.class );
+			bridge= new SpatialFieldBridge( spatialAnn.highGridLevel(),
+					spatialAnn.lowGridLevel() );
+		}
 		else {
 			//find in built-ins
 			XClass returnType = member.getType();
@@ -324,7 +355,7 @@ public final class BridgeFactory {
 		}
 		//TODO add classname
 		if ( bridge == null ) {
-			throw new SearchException( "Unable to guess FieldBridge for " + member.getName() );
+			throw LOG.unableToGuessFieldBridge( member.getName() );
 		}
 		return bridge;
 	}
@@ -426,7 +457,7 @@ public final class BridgeFactory {
 		FieldBridge bridge;
 		Class impl = bridgeAnn.impl();
 		if ( impl == void.class ) {
-			throw new SearchException( "@FieldBridge with no implementation class defined in: " + appliedOnName );
+			throw LOG.noImplementationClassInFieldBridge( appliedOnName);
 		}
 		try {
 			Object instance = impl.newInstance();
@@ -442,10 +473,7 @@ public final class BridgeFactory {
 				bridge = new String2FieldBridgeAdaptor( (org.hibernate.search.bridge.StringBridge) instance );
 			}
 			else {
-				throw new SearchException(
-						"@FieldBridge implementation implements none of the field bridge interfaces: "
-								+ impl + " in " + appliedOnName
-				);
+				throw LOG.noFieldBridgeInterfaceImplementedByFieldBridge( impl.getName(), appliedOnName );
 			}
 			if ( bridgeAnn.params().length > 0 && ParameterizedBridge.class.isAssignableFrom( impl ) ) {
 				Map<String, String> params = new HashMap<String, String>( bridgeAnn.params().length );
@@ -457,8 +485,7 @@ public final class BridgeFactory {
 			populateReturnType( appliedOnType, impl, instance );
 		}
 		catch ( Exception e ) {
-			//TODO add classname
-			throw new SearchException( "Unable to instantiate FieldBridge for " + appliedOnName, e );
+			throw LOG.unableToInstantiateFieldBridge( appliedOnName, appliedOnType.getName(), e );
 		}
 		return bridge;
 	}
@@ -486,7 +513,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return DATE_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown Resolution: " + resolution );
+				throw LOG.unknownResolution( resolution.toString()) ;
 		}
 	}
 
@@ -507,7 +534,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return ARRAY_DATE_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown ArrayBridge for resolution: " + resolution );
+				throw LOG.unknownArrayBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -528,7 +555,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return MAP_DATE_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown MapBridge for resolution: " + resolution );
+				throw LOG.unknownMapBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -549,7 +576,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return ITERABLE_DATE_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown IterableBrdige for resolution: " + resolution );
+				throw LOG.unknownIterableBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -570,7 +597,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return CALENDAR_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown Resolution: " + resolution );
+				throw LOG.unknownResolution( resolution.toString()) ;
 		}
 	}
 
@@ -591,7 +618,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return ARRAY_CALENDAR_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown ArrayBridge for resolution: " + resolution );
+				throw LOG.unknownArrayBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -612,7 +639,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return MAP_CALENDAR_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown MapBridge for resolution: " + resolution );
+				throw LOG.unknownMapBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -633,7 +660,7 @@ public final class BridgeFactory {
 			case MILLISECOND:
 				return ITERABLE_CALENDAR_MILLISECOND;
 			default:
-				throw new AssertionFailure( "Unknown IterableBridge for resolution: " + resolution );
+				throw LOG.unknownIterableBridgeForResolution( resolution.toString()) ;
 		}
 	}
 
@@ -657,7 +684,7 @@ public final class BridgeFactory {
 			return (TwoWayFieldBridge) fb;
 		}
 		else {
-			throw new SearchException( "FieldBridge passed in is not an instance of " + TwoWayFieldBridge.class.getSimpleName() );
+			throw LOG.fieldBridgeNotAnInstanceof( TwoWayFieldBridge.class.getSimpleName() );
 		}
 	}
 
@@ -681,9 +708,7 @@ public final class BridgeFactory {
 		}
 
 		if ( bridge == null ) {
-			throw new SearchException(
-					"Unable to guess FieldBridge for " + org.hibernate.search.annotations.FieldBridge.class.getName()
-			);
+			throw LOG.unableToGuessFieldBridge( appliedOnType.getName() );
 		}
 
 		return bridge;

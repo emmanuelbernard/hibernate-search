@@ -40,8 +40,18 @@ public class SpatialFieldBridge implements FieldBridge, ParameterizedBridge {
 	public static final int MIN_GRID_LEVEL = 0;
 	public static final int MAX_GRID_LEVEL = 16;
 
-	private int min_grid_level = MIN_GRID_LEVEL;
-	private int max_grid_level = MAX_GRID_LEVEL;
+	private int highGridLevel = MIN_GRID_LEVEL;
+	private int lowGridLevel = MAX_GRID_LEVEL;
+
+	private boolean gridIndex = true;
+	private boolean numericFieldsIndex = true;
+
+	public SpatialFieldBridge() {}
+
+	public SpatialFieldBridge( int highGridLevel, int lowGridLevel ) {
+		this.highGridLevel = highGridLevel;
+		this.lowGridLevel = lowGridLevel;
+	}
 
 	/**
 	 * Actual overridden method that does the indexing
@@ -57,39 +67,54 @@ public class SpatialFieldBridge implements FieldBridge, ParameterizedBridge {
 
 			Coordinates coordinates = (Coordinates) value;
 
-			Point point = Point.fromDegrees( coordinates.getLatitude(), coordinates.getLongitude() );
+			if( gridIndex ) {
+				Point point = Point.fromDegrees( coordinates.getLatitude(), coordinates.getLongitude() );
 
-			Map<Integer, String> cellIds = GridHelper.getGridCellsIds( point, min_grid_level, max_grid_level );
+				Map<Integer, String> cellIds = GridHelper.getGridCellsIds( point, highGridLevel, lowGridLevel );
 
-			for ( int i = min_grid_level; i <= max_grid_level; i++ ) {
-				luceneOptions.addFieldToDocument( GridHelper.formatFieldName( i, name ), cellIds.get( i ), document );
+				for ( int i = highGridLevel; i <= lowGridLevel; i++ ) {
+					luceneOptions.addFieldToDocument( GridHelper.formatFieldName( i, name ), cellIds.get( i ), document );
+				}
 			}
 
-			luceneOptions.addNumericFieldToDocument( GridHelper.formatLatitude( name ), point.getLatitude(), document );
+			if( numericFieldsIndex ) {
+				luceneOptions.addNumericFieldToDocument(
+						GridHelper.formatLatitude( name ),
+						coordinates.getLatitude(),
+						document
+				);
 
-			luceneOptions.addNumericFieldToDocument(
-					GridHelper.formatLongitude( name ),
-					point.getLongitude(),
-					document
-			);
-
+				luceneOptions.addNumericFieldToDocument(
+						GridHelper.formatLongitude( name ),
+						coordinates.getLongitude(),
+						document
+				);
+			}
 		}
 	}
 
 	/**
 	 * Override method for default min and max grid level
 	 *
-	 * @param parameters Map containing the min_grid_level and max_grid_level values
+	 * @param parameters Map containing the highGridLevel and lowGridLevel values
 	 */
 	@Override
 	public void setParameterValues(Map parameters) {
-		Object min_grid_level = parameters.get( "min_grid_level" );
-		if ( min_grid_level instanceof Integer ) {
-			this.min_grid_level = ( Integer ) min_grid_level;
+		Object highGridLevel = parameters.get( "highGridLevel" );
+		if ( highGridLevel instanceof Integer ) {
+			this.highGridLevel = ( Integer ) highGridLevel;
 		}
-		Object max_grid_level = parameters.get( "min_grid_level" );
-		if ( max_grid_level instanceof Integer ) {
-			this.max_grid_level = ( Integer ) max_grid_level;
+		Object lowGridLevel = parameters.get( "highGridLevel" );
+		if ( lowGridLevel instanceof Integer ) {
+			this.lowGridLevel = ( Integer ) lowGridLevel;
+		}
+		Object gridIndex = parameters.get( "gridIndex" );
+		if ( gridIndex instanceof Boolean ) {
+			this.gridIndex = ( Boolean ) gridIndex;
+		}
+		Object numericFieldsIndex = parameters.get( "numericFieldsIndex" );
+		if ( numericFieldsIndex instanceof Boolean ) {
+			this.numericFieldsIndex = ( Boolean ) numericFieldsIndex;
 		}
 	}
 }
