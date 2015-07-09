@@ -49,7 +49,7 @@ public class RegistrationController {
 		// forces to send a JMS messages
 		em.flush();
 		Search.getFullTextEntityManager( em ).flushToIndexes();
-		sessionContext.setRollbackOnly();
+		throw new RuntimeException( "Shit happens" );
 	}
 
 	public int deleteAllMembers() throws Exception {
